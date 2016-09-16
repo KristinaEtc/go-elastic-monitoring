@@ -1,19 +1,18 @@
 package main
 
 import (
-	//important: must execute first; do not move
 	"strconv"
-
-	_ "github.com/KristinaEtc/slflog"
-	elastic "gopkg.in/olivere/elastic.v3"
-
 	"sync"
 	"time"
+
+	//important: must execute first; do not move
+	_ "github.com/KristinaEtc/slflog"
 
 	"github.com/KristinaEtc/config"
 	"github.com/go-stomp/stomp"
 	_ "github.com/lib/pq"
 	"github.com/ventu-io/slf"
+	elastic "gopkg.in/olivere/elastic.v3"
 )
 
 var log = slf.WithContext("go-stomp-nominatim.go")
@@ -84,7 +83,7 @@ func Connect(address string, login string, passcode string) (*stomp.Conn, error)
 
 	conn, err := stomp.Dial("tcp", address, options...)
 	if err != nil {
-		log.Errorf("cannot connect to server %s: %v", address, err.Error())
+		log.Errorf("cannot connect to server %s: %v ", address, err.Error())
 		return nil, err
 	}
 
@@ -94,6 +93,11 @@ func Connect(address string, login string, passcode string) (*stomp.Conn, error)
 func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 	var msgCount = 0
 	defer wg.Done()
+
+	log.WithFields(slf.Fields{
+		"queque":       subNode.Queue,
+		"elasticIndex": subNode.Index,
+	}).Debug("Configuring... ")
 
 	conn, err := Connect(subNode.Host, subNode.Login, subNode.Passcode)
 	if err != nil {
