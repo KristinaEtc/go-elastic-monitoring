@@ -49,10 +49,12 @@ type Subs struct {
 
 type ConfigFile struct {
 	Subscriptions []Subs
+	TypeName      string
 }
 
 var globalOpt = ConfigFile{
 	Subscriptions: []Subs{},
+	TypeName:      "table-info",
 }
 
 func recvMessages() {
@@ -70,10 +72,6 @@ func recvMessages() {
 }
 
 func Connect(address string, login string, passcode string) (*stomp.Conn, error) {
-	//defer func() {
-	//	stop <- true
-	//}()
-	//heartbeat := time.Duration(globalOpt.Global.Heartbeat) * time.Second
 
 	options = []func(*stomp.Conn) error{
 		stomp.ConnOpt.Login(login, passcode),
@@ -112,6 +110,9 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 		return
 	}
 
+	var message *string
+	var utc *string
+
 	for {
 		msg, err := sub.Read()
 		if err != nil {
@@ -120,16 +121,16 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 			continue
 		}
 		time.Sleep(time.Second)
-		message, send := addProcessNameShort(msg.Body)
-		if !send {
-			//trash data; not redirect to elastic
+
+		//check if message has necessary fields; adding fields
+		if message, utc, err = formatMsg(msg.Body); err != nil {
 			continue
 		}
 
 		log.Infof("[%s]/[%s]", subNode.Queue, subNode.Index)
 		_, err = client.Index().
-			Index(subNode.Index).
-			Type("external").
+			Index(subNode.Index + *(utc)).
+			Type(globalOpt.TypeName).
 			Id(strconv.Itoa(msgCount)).
 			BodyJson(message).
 			Refresh(true).
@@ -140,6 +141,8 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 		}
 		time.Sleep(time.Second)
 		msgCount++
+
+		//client.IndexPutTemplate(subNode.Index()).BodyString
 	}
 }
 
@@ -165,53 +168,76 @@ func main() {
 	<-stop
 }
 
-func addProcessNameShort(msg []byte) (string, bool) {
+func formatMsg(msg []byte) (*string, *string, error) {
+
+	// unmarshal check if msg has nessesary fields
+	importantFields, err := checkMsgForValid(msg)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	t, err := time.Parse((*importantFields).Utc, "20060102")
+	if err != nil {
+		log.Warnf("Could not parse utc from msg: %s", err.Error())
+		return nil, nil, err
+	}
+
+	tStr := t.String()
+	formattedMsg := addProcessNameShort(msg, (*importantFields).ProcessName)
+
+	return &formattedMsg, &tStr, nil
+}
+
+func checkMsgForValid(msg []byte) (*NecessatyFields, error) {
+
+	var data NecessatyFields
+
+	if err := json.Unmarshal(msg, &data); err != nil {
+		log.Errorf("Could not get parse request: %s", err.Error())
+		return nil, err
+	}
+	if data.ID == "" || data.Type == "" || data.Utc == "" {
+		log.Debug("No one of that field: ID, Type, Utc in message")
+		return nil, ErrNoNeedfullFields
+	}
+	return &data, nil
+}
+
+func addProcessNameShort(msg []byte, fullProcessName string) string {
 
 	log.Info("****************************")
-	type strWithProcessName struct {
-		ProcessName string `json:"process"`
-		Id          string `json:"id"`
-		Type        string `json:"type"`
-		Utc         string `json:"utc"`
+
+	shortName := getShortName(fullProcessName)
+	newMsg := "{\"process_short\": \"" + shortName + "\", " + string(msg[1:])
+	log.Info(newMsg)
+	return newMsg
+}
+
+func getShortName(fullName string) string {
+	if fullName == "" {
+		return ""
 	}
 
-	var processNameShort = ""
-	var b strWithProcessName
-	if err := json.Unmarshal(msg, &b); err != nil {
-		log.Errorf("Could not get parse request: %s", err.Error())
-		return string(msg), false
-	} else {
-		if b.Id == "" || b.Type == "" || b.Utc == "" {
-			log.Debug("[b.Id  || b.Type  || b.Utc] == nil ")
-			return string(msg), false
-		}
-		log.Infof("[process]=[%s]", b.ProcessName)
-		processNameShort = trimStringFromSym(b.ProcessName, "/")
+	var shortName string
 
-		log.Infof("processNameShort /=%s", processNameShort)
-		if processNameShort == "" {
-			processNameShort = trimStringFromSym(b.ProcessName, "\\")
-			log.Infof("processNameShort \\=%s", processNameShort)
-		}
-		if processNameShort == "" {
-			log.Infof("processNameShort =%s", processNameShort)
-			if b.ProcessName == "" {
-				log.Infof("processNameShort b.ProcessName =%s", processNameShort)
-				b.ProcessName = "nil"
-			}
-			processNameShort = b.ProcessName
-		}
-		log.Infof("[process_short]=%s", processNameShort)
-		newMsg := "{\"process_short\": \"" + processNameShort + "\", " + string(msg[1:])
-
-		log.Info(newMsg)
-		return newMsg, true
+	shortName = trimStringFromSym(fullName, "/")
+	if shortName != "" {
+		return shortName
 	}
+	log.Infof("processNameShort /=%s", shortName)
 
+	shortName = trimStringFromSym(fullName, "\\")
+	if shortName != "" {
+		return shortName
+	}
+	log.Infof("processNameShort \\=%s", shortName)
+
+	log.Debug("processShort = process")
+	return fullName
 }
 
 func trimStringFromSym(str string, sym string) string {
-	if idx := strings.Index(str, sym); idx != -1 {
+	if idx := strings.LastIndex(str, sym); idx != -1 {
 		return str[(idx - 1):]
 	}
 	return str
