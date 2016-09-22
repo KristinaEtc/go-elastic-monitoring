@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"strconv"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -116,7 +116,7 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 	for {
 		msg, err := sub.Read()
 		if err != nil {
-			//log.Warn("Got empty message; ignore")
+			log.Warn("Got empty message; ignore")
 			time.Sleep(time.Second)
 			continue
 		}
@@ -127,22 +127,22 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 			continue
 		}
 
-		log.Infof("[%s]/[%s]", subNode.Queue, subNode.Index)
-		_, err = client.Index().
-			Index(subNode.Index + *(utc)).
-			Type(globalOpt.TypeName).
-			Id(strconv.Itoa(msgCount)).
-			BodyJson(message).
-			Refresh(true).
-			Do()
-		if err != nil {
-			//log.Errorf("Elasticsearch: %s in message %s", err.Error(), message)
-			log.Errorf("Elasticsearch: %s", err.Error())
+		//log.Infof("[%s]/[%s]", subNode.Queue, subNode.Index)
+		if subNode.Index == "global_logs" {
+			_, err = client.Index().
+				Index(subNode.Index + "-" + *utc).
+				Type(globalOpt.TypeName).
+				BodyString(*message).
+				//Refresh(true).
+				Do()
+			if err != nil {
+				log.Errorf("Elasticsearch [index %s]: %s in message %s", subNode.Index, err.Error(), *message)
+				//log.Errorf("Elasticsearch: %s", err.Error())
+				os.Exit(1)
+			}
+			//time.Sleep(time.Second)
+			msgCount++
 		}
-		time.Sleep(time.Second)
-		msgCount++
-
-		//client.IndexPutTemplate(subNode.Index()).BodyString
 	}
 }
 
@@ -164,6 +164,8 @@ func main() {
 
 	log.Info("Starting working...")
 
+	prepareElasticIndexTemplate()
+
 	go recvMessages()
 	<-stop
 }
@@ -176,28 +178,63 @@ func formatMsg(msg []byte) (*string, *string, error) {
 		return nil, nil, err
 	}
 
-	t, err := time.Parse((*importantFields).Utc, "20060102")
+	lenUTCFormat := len((*importantFields).Utc)
+	var timeStr string
+	var t time.Time
+
+	switch {
+	case lenUTCFormat == lenRfc3339:
+		{
+			t, err = time.Parse(time.RFC3339, (*importantFields).Utc)
+		}
+	case lenUTCFormat < lenRfc3339:
+		{
+			if lenUTCFormat == lenRfc3339WithoutZ {
+				t, err = time.Parse("2006-01-02T15:04:05", (*importantFields).Utc)
+			}
+			if lenUTCFormat == lenRfc3339WithZ {
+				t, err = time.Parse("2006-01-02T15:04:05Z", (*importantFields).Utc)
+			}
+		}
+	case lenUTCFormat > lenRfc3339:
+		{
+			if lenUTCFormat == lenRfc3339WithTimeZone {
+				t, err = time.Parse("2006-01-02T15:04:05Z +0300 MSK", (*importantFields).Utc)
+			}
+
+		}
+	default:
+		{
+			log.Warnf("Unknown utc format: %s", (*importantFields).Utc)
+			err = ErrUnknownUTCFormat
+		}
+	}
+
 	if err != nil {
-		log.Warnf("Could not parse utc from msg: %s", err.Error())
 		return nil, nil, err
 	}
 
-	tStr := t.String()
+	timeStr = t.String()
+
+	//cut all except date
+	idx := strings.IndexAny(timeStr, " ")
+	timeStr = timeStr[:idx]
+
 	formattedMsg := addProcessNameShort(msg, (*importantFields).ProcessName)
 
-	return &formattedMsg, &tStr, nil
+	return &formattedMsg, &timeStr, nil
 }
 
-func checkMsgForValid(msg []byte) (*NecessatyFields, error) {
+func checkMsgForValid(msg []byte) (*NecessaryFields, error) {
 
-	var data NecessatyFields
+	var data NecessaryFields
 
 	if err := json.Unmarshal(msg, &data); err != nil {
 		log.Errorf("Could not get parse request: %s", err.Error())
 		return nil, err
 	}
 	if data.ID == "" || data.Type == "" || data.Utc == "" {
-		log.Debug("No one of that field: ID, Type, Utc in message")
+		log.Warn("At least one of that field [ID, Type, Utc] not found; message ignored")
 		return nil, ErrNoNeedfullFields
 	}
 	return &data, nil
@@ -205,11 +242,8 @@ func checkMsgForValid(msg []byte) (*NecessatyFields, error) {
 
 func addProcessNameShort(msg []byte, fullProcessName string) string {
 
-	log.Info("****************************")
-
 	shortName := getShortName(fullProcessName)
 	newMsg := "{\"process_short\": \"" + shortName + "\", " + string(msg[1:])
-	log.Info(newMsg)
 	return newMsg
 }
 
@@ -224,21 +258,30 @@ func getShortName(fullName string) string {
 	if shortName != "" {
 		return shortName
 	}
-	log.Infof("processNameShort /=%s", shortName)
 
 	shortName = trimStringFromSym(fullName, "\\")
 	if shortName != "" {
 		return shortName
 	}
-	log.Infof("processNameShort \\=%s", shortName)
 
-	log.Debug("processShort = process")
 	return fullName
 }
 
 func trimStringFromSym(str string, sym string) string {
 	if idx := strings.LastIndex(str, sym); idx != -1 {
-		return str[(idx - 1):]
+		return str[(idx-1)+2:]
 	}
-	return str
+	return ""
+}
+
+func prepareElasticIndexTemplate() {
+
+	//template := strings.Replace(mappingTemplate, "%%MAPPING_VERSION%%", mappingVersion, -1)
+	_, err := client.IndexPutTemplate("global_logs-*").BodyString(mappingTemplate).Do()
+	if err != nil {
+		log.Errorf("Could not add index template; %s", err.Error())
+		os.Exit(1)
+	} else {
+		log.Info("Index template added.")
+	}
 }
