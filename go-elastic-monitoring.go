@@ -117,10 +117,8 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 		msg, err := sub.Read()
 		if err != nil {
 			log.Warn("Got empty message; ignore")
-			time.Sleep(time.Second)
 			continue
 		}
-		time.Sleep(time.Second)
 
 		//check if message has necessary fields; adding fields
 		if message, utc, err = formatMsg(msg.Body); err != nil {
