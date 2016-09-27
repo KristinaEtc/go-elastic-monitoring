@@ -91,7 +91,6 @@ func Connect(address string, login string, passcode string) (*stomp.Conn, error)
 }
 
 func readFromSub(subNode Subs, wg *sync.WaitGroup) {
-	var msgCount = 0
 	defer wg.Done()
 
 	log.WithFields(slf.Fields{
@@ -122,24 +121,21 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 
 		//check if message has necessary fields; adding fields
 		if message, utc, err = formatMsg(msg.Body); err != nil {
+			log.Errorf("topic %s - err %s", subNode.Queue, err.Error())
 			continue
 		}
 
 		//log.Infof("[%s]/[%s]", subNode.Queue, subNode.Index)
-		if subNode.Index == "global_logs" {
-			_, err = client.Index().
-				Index(subNode.Index + "-" + *utc).
-				Type(globalOpt.TypeName).
-				BodyString(*message).
-				//Refresh(true).
-				Do()
-			if err != nil {
-				log.Errorf("Elasticsearch [index %s]: %s in message %s", subNode.Index, err.Error(), *message)
-				//log.Errorf("Elasticsearch: %s", err.Error())
-				os.Exit(1)
-			}
-			//time.Sleep(time.Second)
-			msgCount++
+		_, err = client.Index().
+			Index(subNode.Index + "-" + *utc).
+			Type(globalOpt.TypeName).
+			BodyString(*message).
+			//Refresh(true).
+			Do()
+		if err != nil {
+			log.Errorf("Elasticsearch [index %s][topic %s]: %s in message %s", subNode.Index, subNode.Queue, err.Error(), *message)
+			//log.Errorf("Elasticsearch: %s", err.Error())
+			os.Exit(1)
 		}
 	}
 }
@@ -161,8 +157,6 @@ func main() {
 	log.Infof("VERSION=%s\n", Version)
 
 	log.Info("Starting working...")
-
-	prepareElasticIndexTemplate()
 
 	go recvMessages()
 	<-stop
@@ -228,11 +222,11 @@ func checkMsgForValid(msg []byte) (*NecessaryFields, error) {
 	var data NecessaryFields
 
 	if err := json.Unmarshal(msg, &data); err != nil {
-		log.Errorf("Could not get parse request: %s", err.Error())
+		//log.Errorf("Could not get parse request: %s", err.Error())
 		return nil, err
 	}
 	if data.ID == "" || data.Type == "" || data.Utc == "" {
-		log.Warn("At least one of that field [ID, Type, Utc] not found; message ignored")
+		//log.Warn("At least one of that field [ID, Type, Utc] not found; message ignored")
 		return nil, ErrNoNeedfullFields
 	}
 	return &data, nil
