@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"os"
 	"strings"
 	"sync"
@@ -46,7 +47,8 @@ type Subs struct {
 }
 
 type Elastic struct {
-	URL string
+	URL          string
+	TemplateName string
 }
 
 // GlobalConf is a struct with global options,
@@ -138,13 +140,15 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 			Do()
 		if err != nil {
 			log.Errorf("Elasticsearch [index %s][topic %s]: %s in message %s", subNode.Index, subNode.Queue, err.Error(), *message)
-			//log.Errorf("Elasticsearch: %s", err.Error())
-			os.Exit(1)
+			log.Errorf("Elasticsearch: %s", err.Error())
+			//os.Exit(1)
 		}
 	}
 }
 
 func main() {
+
+	mapping := flag.Bool("map", false, "create new mapping to index")
 
 	var err error
 	config.ReadGlobalConfig(&globalOpt, "go-elastic-monitoring options")
@@ -153,6 +157,10 @@ func main() {
 	if err != nil {
 		log.Error("elasicsearch: could not create client")
 		os.Exit(1)
+	}
+
+	if *mapping {
+		prepareElasticIndexTemplate()
 	}
 
 	log.Infof("BuildDate=%s\n", BuildDate)
@@ -273,8 +281,14 @@ func trimStringFromSym(str string, sym string) string {
 
 func prepareElasticIndexTemplate() {
 
+	mappedTempl, err := initTemplate(globalOpt.ElasticServer.TemplateName)
+	if err != nil {
+		log.Error(err.Error())
+		os.Exit(1)
+	}
+
 	//template := strings.Replace(mappingTemplate, "%%MAPPING_VERSION%%", mappingVersion, -1)
-	_, err := client.IndexPutTemplate("global_logs-2*").BodyString(mappingTemplate).Do()
+	_, err = client.IndexPutTemplate(globalOpt.ElasticServer.TemplateName).BodyString(mappedTempl).Do()
 	if err != nil {
 		log.Errorf("Could not add index template; %s", err.Error())
 		os.Exit(1)

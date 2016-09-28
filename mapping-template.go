@@ -1,10 +1,15 @@
 package main
 
+import (
+	"bytes"
+	"html/template"
+)
+
 //const mappingVersion = "1"
 
 var mappingTemplate = `
 {
-	"template": "global_logs-*",
+	"template": "{{.template}}",
 	"settings": {
 		"number_of_shards": 1
 	},
@@ -51,3 +56,18 @@ var mappingTemplate = `
 	}
 }
 `
+
+func initTemplate(templateName string) (string, error) {
+
+	var doc bytes.Buffer
+
+	t := template.New("mapping-template")
+	t, err := t.Parse(mappingTemplate)
+	if err != nil {
+		return "", err
+	}
+	t.Execute(&doc, templateName)
+	mappedTmpl := doc.String()
+
+	return mappedTmpl, nil
+}
