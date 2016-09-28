@@ -127,11 +127,9 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 
 		msg, err := sub.Read()
 		if err != nil {
-			log.Warn("Got empty message; ignore")
-			time.Sleep(time.Second)
+			log.Warnf("Got empty message; ignore, err:%s", err.Error())
 			continue
 		}
-		time.Sleep(time.Second)
 
 		//check if message has necessary fields; adding fields
 		if message, utc, err = formatMsg(msg.Body); err != nil {
@@ -166,7 +164,6 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 				//log.Errorf("Elasticsearch: %s", err.Error())
 				os.Exit(1)
 			}
-			//time.Sleep(time.Second)
 			msgCount++
 		}*/
 	}
