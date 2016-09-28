@@ -69,7 +69,7 @@ func (b *Bulker) Run() error {
 
 	// Start bulk processor
 	p, err := b.c.BulkProcessor().
-		Workers(b.workers).              // # of workers
+		//Workers(b.workers).              // # of workers
 		BulkActions(1000).               // # of queued requests before committed
 		BulkSize(4096).                  // # of bytes in requests before committed
 		FlushInterval(10 * time.Second). // autocommit every 10 seconds

@@ -2,8 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"math/rand"
 	"os"
 	"strings"
 	"sync"
@@ -26,21 +24,7 @@ var options = []func(*stomp.Conn) error{}
 var (
 	stop   = make(chan bool)
 	client *elastic.Client
-
-	processor *elastic.BulkProcessor
-	instance  int
-	stopping  bool
-	wg        sync.WaitGroup
-	//	stopping bool
-	//	sigexit bool
-	//	exitchan chan bool
-	//	responsetime *utils.ConcurrentIntMap
-)
-
-const (
-	TOO_MANY_REQUESTS     = 429
-	INTERNAL_SERVER_ERROR = 500
-	SERVICE_UNAVAILABLE   = 503
+	wg     sync.WaitGroup
 )
 
 var (
@@ -58,23 +42,28 @@ type Subs struct {
 	Login    string
 	Passcode string
 	Queue    string
+	TypeName string
 	Index    string
+}
+
+type Elastic struct {
+	URL          string
+	TemplateName string
+	Remapping    bool
 }
 
 // GlobalConf is a struct with global options,
 // like server address and queue format, etc.
-
 type ConfigFile struct {
 	Subscriptions []Subs
-	TypeName      string
+	ElasticServer Elastic `json:"Elastic"`
 }
 
 var globalOpt = ConfigFile{
 	Subscriptions: []Subs{},
-	TypeName:      "table-info",
 }
 
-func recvMessages() {
+func recvMessages(b *Bulker) {
 
 	defer func() {
 		stop <- true
@@ -83,7 +72,7 @@ func recvMessages() {
 	var wg sync.WaitGroup
 	for _, sub := range globalOpt.Subscriptions {
 		wg.Add(1)
-		go readFromSub(sub, &wg)
+		go readFromSub(sub, &wg, b)
 	}
 	wg.Wait()
 }
@@ -107,7 +96,7 @@ func Connect(address string, login string, passcode string) (*stomp.Conn, error)
 	return conn, nil
 }
 
-func readFromSub(subNode Subs, wg *sync.WaitGroup) {
+func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 	//var msgCount = 0
 	defer wg.Done()
 
@@ -140,10 +129,6 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 		}
 		time.Sleep(time.Second)
 
-		if stopping {
-			continue
-		}
-
 		//check if message has necessary fields; adding fields
 		if message, utc, err = formatMsg(msg.Body); err != nil {
 			continue
@@ -151,7 +136,7 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 
 		r := elastic.NewBulkIndexRequest().
 			Index(subNode.Index + "-" + *utc).
-			Type(globalOpt.TypeName).
+			Type(subNode.TypeName).
 			Doc(*message)
 
 		if r == nil {
@@ -159,7 +144,8 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 			os.Exit(1)
 		}
 
-		processor.Add(r)
+		//processor.Add(r)
+		b.p.Add(r)
 
 		log.Debug("4")
 
@@ -182,11 +168,6 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 	}
 }
 
-func init() {
-	stopping = false
-	rand.Seed(time.Now().Unix())
-}
-
 func main() {
 
 	var err error
@@ -205,132 +186,52 @@ func main() {
 
 	log.Info("Starting working...")
 
-	configurateElastic()
-	//prepareElasticIndexTemplate()
+	if globalOpt.ElasticServer.Remapping {
+		prepareElasticIndexTemplate()
+	}
 
-	go recvMessages()
+	b := configurateBulkProcess()
+	defer b.Close()
+
+	go recvMessages(b)
 	<-stop
 }
 
-func configurateElastic() {
-	//prepareElasticIndexTemplate()
-	configurateBulkProcess()
+func configurateBulkProcess() *Bulker {
+	b := &Bulker{c: client}
+	err := b.Run()
+	if err != nil {
+		log.Error(err.Error())
+		os.Exit(1)
+	}
+	//defer b.Close()
+	// Run the statistics printer
+	go func(b *Bulker) {
+		for range time.Tick(10 * time.Second) {
+			printStats(b)
+		}
+	}(b)
 
+	return b
 }
 
 func prepareElasticIndexTemplate() {
 
+	mappedTempl, err := initTemplate(globalOpt.ElasticServer.TemplateName)
+	if err != nil {
+		log.Error(err.Error())
+		os.Exit(1)
+	}
+
+	log.Info(mappedTempl)
+
 	//template := strings.Replace(mappingTemplate, "%%MAPPING_VERSION%%", mappingVersion, -1)
-	_, err := client.IndexPutTemplate("global_logs-*").BodyString(mappingTemplate).Do()
+	_, err = client.IndexPutTemplate(globalOpt.ElasticServer.TemplateName).BodyString(mappedTempl).Do()
 	if err != nil {
 		log.Errorf("Could not add index template; %s", err.Error())
 		os.Exit(1)
 	} else {
 		log.Info("Index template added.")
-	}
-}
-
-func configurateBulkProcess() {
-
-	batch := 1000
-	interval := 1 * time.Minute
-
-	instance++
-
-	processor, err := client.BulkProcessor().Before(beforeCommit).After(afterCommit).
-		Name(fmt.Sprintf("global-logs-worker-%d", instance)).
-		//Workers(concurrent).
-		BulkActions(batch). // commit if # requests >= batch
-		//BulkSize(maxsize).       // commit if size of requests >= maxsize
-		FlushInterval(interval). // commit interval
-		Do()
-	if err != nil {
-		log.Errorf("Elastic: bulc: %s", err.Error())
-		return
-	}
-	go func() {
-		wg.Add(1)
-		defer wg.Done()
-		select {
-		case <-stop:
-			// stop old
-			if processor != nil {
-				processor.Flush()
-				processor.Stop()
-				processor = nil
-			}
-			if client != nil {
-				client.Flush()
-				client.Stop()
-				client = nil
-			}
-			log.Info("Elastic routine exit!")
-			return
-		}
-	}()
-}
-
-func beforeCommit(executionID int64, requests []elastic.BulkableRequest) {
-	wg.Add(1)
-	log.WithFields(slf.Fields{
-		"commitID:":        executionID,
-		"len of requests:": len(requests),
-	}).Debug("preparing commit")
-}
-
-func afterCommit(executionID int64, requests []elastic.BulkableRequest, response *elastic.BulkResponse, err error) {
-	defer wg.Done() //wait for each commit. when all after commit is done, then we close es processor
-
-	log.WithFields(slf.Fields{
-		"finish commitID: ":  executionID,
-		" len of requests: ": len(requests),
-	}).Debug("commit done")
-
-	//zero values by default
-	var success int64
-	var fail int64
-	var skip int64
-
-	shouldstop := false
-	for idx, item := range response.Items {
-		for _, resp := range item {
-			if resp.Error == nil {
-				success = success + 1
-				continue //fast path, no error
-			} else {
-				fail = fail + 1
-			}
-			switch resp.Status {
-			case TOO_MANY_REQUESTS:
-				// alarm?
-				time.Sleep(time.Duration(rand.Intn(50)+1) * time.Millisecond)
-				fallthrough
-			case SERVICE_UNAVAILABLE, INTERNAL_SERVER_ERROR:
-				shouldstop = true //when encounters these errors, we thought stop consuming and wait for service
-				/*r := requests[idx]
-				switch {
-				case sigexit: //already marked exit, no more push to processor again
-					Backup(r)
-				default:
-					go func() {
-						if !processor.AddTimeout(r, 100*time.Second) { //wait for 100 second to push, if not, backup
-							Backup(r)
-						}
-					}()
-				}*/
-				log.Error(resp.Error.Reason)
-			default:
-				skip = skip + 1
-				log.Warnf("Elasticsearch: insert failed:", requests[idx].String(), resp.Status, resp.Error.Reason)
-				continue //skip
-			}
-		}
-	}
-
-	if err != nil || shouldstop {
-		stopping = true
-	} else {
-		stopping = false
 	}
 }
 
