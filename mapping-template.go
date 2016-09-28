@@ -9,7 +9,7 @@ import (
 
 var mappingTemplate = `
 {
-	"template": "{{.template}}",
+	"template": "{.template}",
 	"settings": {
 		"number_of_shards": 1
 	},
@@ -59,6 +59,10 @@ var mappingTemplate = `
 
 func initTemplate(templateName string) (string, error) {
 
+	type tmpl struct {
+		template string
+	}
+
 	var doc bytes.Buffer
 
 	t := template.New("mapping-template")
@@ -66,8 +70,10 @@ func initTemplate(templateName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	t.Execute(&doc, templateName)
+	tN := tmpl{template: templateName}
+	t.Execute(&doc, tN)
 	mappedTmpl := doc.String()
+	log.Debug(mappedTmpl)
 
 	return mappedTmpl, nil
 }

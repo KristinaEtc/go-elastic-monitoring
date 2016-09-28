@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"os"
 	"strings"
 	"sync"
@@ -49,6 +48,7 @@ type Subs struct {
 type Elastic struct {
 	URL          string
 	TemplateName string
+	Remapping    bool
 }
 
 // GlobalConf is a struct with global options,
@@ -148,8 +148,6 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 
 func main() {
 
-	mapping := flag.Bool("map", false, "create new mapping to index")
-
 	var err error
 	config.ReadGlobalConfig(&globalOpt, "go-elastic-monitoring options")
 	log.Debug(globalOpt.ElasticServer.URL)
@@ -159,7 +157,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *mapping {
+	if globalOpt.ElasticServer.Remapping {
 		prepareElasticIndexTemplate()
 	}
 
@@ -286,6 +284,8 @@ func prepareElasticIndexTemplate() {
 		log.Error(err.Error())
 		os.Exit(1)
 	}
+
+	log.Info(mappedTempl)
 
 	//template := strings.Replace(mappingTemplate, "%%MAPPING_VERSION%%", mappingVersion, -1)
 	_, err = client.IndexPutTemplate(globalOpt.ElasticServer.TemplateName).BodyString(mappedTempl).Do()
