@@ -41,6 +41,7 @@ type Subs struct {
 	Login    string
 	Passcode string
 	Queue    string
+	TypeName string
 	Index    string
 }
 
@@ -49,12 +50,10 @@ type Subs struct {
 
 type ConfigFile struct {
 	Subscriptions []Subs
-	TypeName      string
 }
 
 var globalOpt = ConfigFile{
 	Subscriptions: []Subs{},
-	TypeName:      "table-info",
 }
 
 func recvMessages() {
@@ -128,7 +127,7 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 		//log.Infof("[%s]/[%s]", subNode.Queue, subNode.Index)
 		_, err = client.Index().
 			Index(subNode.Index + "-" + *utc).
-			Type(globalOpt.TypeName).
+			Type(subNode.TypeName).
 			BodyString(*message).
 			//Refresh(true).
 			Do()
