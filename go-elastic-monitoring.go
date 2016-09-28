@@ -147,6 +147,7 @@ func main() {
 	client, err = elastic.NewClient()
 	if err != nil {
 		log.Error("elasicsearch: could not create client")
+		os.Exit(1)
 	}
 
 	log.Infof("BuildDate=%s\n", BuildDate)
