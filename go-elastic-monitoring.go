@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"sync"
@@ -24,6 +26,21 @@ var options = []func(*stomp.Conn) error{}
 var (
 	stop   = make(chan bool)
 	client *elastic.Client
+
+	processor *elastic.BulkProcessor
+	instance  int
+	stopping  bool
+	wg        sync.WaitGroup
+	//	stopping bool
+	//	sigexit bool
+	//	exitchan chan bool
+	//	responsetime *utils.ConcurrentIntMap
+)
+
+const (
+	TOO_MANY_REQUESTS     = 429
+	INTERNAL_SERVER_ERROR = 500
+	SERVICE_UNAVAILABLE   = 503
 )
 
 var (
@@ -91,6 +108,7 @@ func Connect(address string, login string, passcode string) (*stomp.Conn, error)
 }
 
 func readFromSub(subNode Subs, wg *sync.WaitGroup) {
+	//var msgCount = 0
 	defer wg.Done()
 
 	log.WithFields(slf.Fields{
@@ -113,31 +131,60 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup) {
 	var utc *string
 
 	for {
+
 		msg, err := sub.Read()
 		if err != nil {
 			log.Warn("Got empty message; ignore")
+			time.Sleep(time.Second)
+			continue
+		}
+		time.Sleep(time.Second)
+
+		if stopping {
 			continue
 		}
 
 		//check if message has necessary fields; adding fields
 		if message, utc, err = formatMsg(msg.Body); err != nil {
-			log.Errorf("topic %s - err %s", subNode.Queue, err.Error())
 			continue
 		}
 
-		//log.Infof("[%s]/[%s]", subNode.Queue, subNode.Index)
-		_, err = client.Index().
+		r := elastic.NewBulkIndexRequest().
 			Index(subNode.Index + "-" + *utc).
 			Type(globalOpt.TypeName).
-			BodyString(*message).
-			//Refresh(true).
-			Do()
-		if err != nil {
-			log.Errorf("Elasticsearch [index %s][topic %s]: %s in message %s", subNode.Index, subNode.Queue, err.Error(), *message)
-			//log.Errorf("Elasticsearch: %s", err.Error())
+			Doc(*message)
+
+		if r == nil {
+			log.Warn("nil")
 			os.Exit(1)
 		}
+
+		processor.Add(r)
+
+		log.Debug("4")
+
+		//log.Infof("[%s]/[%s]", subNode.Queue, subNode.Index)
+		/*if subNode.Index == "global_logs" {
+			_, err = client.Index().
+				Index(subNode.Index + "-" + *utc).
+				Type(globalOpt.TypeName).
+				BodyString(*message).
+				//Refresh(true).
+				Do()
+			if err != nil {
+				log.Errorf("Elasticsearch [index %s]: %s in message %s", subNode.Index, err.Error(), *message)
+				//log.Errorf("Elasticsearch: %s", err.Error())
+				os.Exit(1)
+			}
+			//time.Sleep(time.Second)
+			msgCount++
+		}*/
 	}
+}
+
+func init() {
+	stopping = false
+	rand.Seed(time.Now().Unix())
 }
 
 func main() {
@@ -158,8 +205,133 @@ func main() {
 
 	log.Info("Starting working...")
 
+	configurateElastic()
+	//prepareElasticIndexTemplate()
+
 	go recvMessages()
 	<-stop
+}
+
+func configurateElastic() {
+	//prepareElasticIndexTemplate()
+	configurateBulkProcess()
+
+}
+
+func prepareElasticIndexTemplate() {
+
+	//template := strings.Replace(mappingTemplate, "%%MAPPING_VERSION%%", mappingVersion, -1)
+	_, err := client.IndexPutTemplate("global_logs-*").BodyString(mappingTemplate).Do()
+	if err != nil {
+		log.Errorf("Could not add index template; %s", err.Error())
+		os.Exit(1)
+	} else {
+		log.Info("Index template added.")
+	}
+}
+
+func configurateBulkProcess() {
+
+	batch := 1000
+	interval := 1 * time.Minute
+
+	instance++
+
+	processor, err := client.BulkProcessor().Before(beforeCommit).After(afterCommit).
+		Name(fmt.Sprintf("global-logs-worker-%d", instance)).
+		//Workers(concurrent).
+		BulkActions(batch). // commit if # requests >= batch
+		//BulkSize(maxsize).       // commit if size of requests >= maxsize
+		FlushInterval(interval). // commit interval
+		Do()
+	if err != nil {
+		log.Errorf("Elastic: bulc: %s", err.Error())
+		return
+	}
+	go func() {
+		wg.Add(1)
+		defer wg.Done()
+		select {
+		case <-stop:
+			// stop old
+			if processor != nil {
+				processor.Flush()
+				processor.Stop()
+				processor = nil
+			}
+			if client != nil {
+				client.Flush()
+				client.Stop()
+				client = nil
+			}
+			log.Info("Elastic routine exit!")
+			return
+		}
+	}()
+}
+
+func beforeCommit(executionID int64, requests []elastic.BulkableRequest) {
+	wg.Add(1)
+	log.WithFields(slf.Fields{
+		"commitID:":        executionID,
+		"len of requests:": len(requests),
+	}).Debug("preparing commit")
+}
+
+func afterCommit(executionID int64, requests []elastic.BulkableRequest, response *elastic.BulkResponse, err error) {
+	defer wg.Done() //wait for each commit. when all after commit is done, then we close es processor
+
+	log.WithFields(slf.Fields{
+		"finish commitID: ":  executionID,
+		" len of requests: ": len(requests),
+	}).Debug("commit done")
+
+	//zero values by default
+	var success int64
+	var fail int64
+	var skip int64
+
+	shouldstop := false
+	for idx, item := range response.Items {
+		for _, resp := range item {
+			if resp.Error == nil {
+				success = success + 1
+				continue //fast path, no error
+			} else {
+				fail = fail + 1
+			}
+			switch resp.Status {
+			case TOO_MANY_REQUESTS:
+				// alarm?
+				time.Sleep(time.Duration(rand.Intn(50)+1) * time.Millisecond)
+				fallthrough
+			case SERVICE_UNAVAILABLE, INTERNAL_SERVER_ERROR:
+				shouldstop = true //when encounters these errors, we thought stop consuming and wait for service
+				/*r := requests[idx]
+				switch {
+				case sigexit: //already marked exit, no more push to processor again
+					Backup(r)
+				default:
+					go func() {
+						if !processor.AddTimeout(r, 100*time.Second) { //wait for 100 second to push, if not, backup
+							Backup(r)
+						}
+					}()
+				}*/
+				log.Error(resp.Error.Reason)
+			default:
+				skip = skip + 1
+				log.Warnf("Elasticsearch: insert failed:", requests[idx].String(), resp.Status, resp.Error.Reason)
+				continue //skip
+			}
+		}
+	}
+
+	if err != nil || shouldstop {
+		stopping = true
+	} else {
+		stopping = false
+	}
 }
 
 func formatMsg(msg []byte) (*string, *string, error) {
@@ -193,7 +365,6 @@ func formatMsg(msg []byte) (*string, *string, error) {
 			if lenUTCFormat == lenRfc3339WithTimeZone {
 				t, err = time.Parse("2006-01-02T15:04:05Z +0300 MSK", (*importantFields).Utc)
 			}
-
 		}
 	default:
 		{
@@ -222,11 +393,11 @@ func checkMsgForValid(msg []byte) (*NecessaryFields, error) {
 	var data NecessaryFields
 
 	if err := json.Unmarshal(msg, &data); err != nil {
-		//log.Errorf("Could not get parse request: %s", err.Error())
+		log.Errorf("Could not get parse request: %s", err.Error())
 		return nil, err
 	}
 	if data.ID == "" || data.Type == "" || data.Utc == "" {
-		//log.Warn("At least one of that field [ID, Type, Utc] not found; message ignored")
+		log.Warn("At least one of that field [ID, Type, Utc] not found; message ignored")
 		return nil, ErrNoNeedfullFields
 	}
 	return &data, nil
@@ -264,16 +435,4 @@ func trimStringFromSym(str string, sym string) string {
 		return str[(idx-1)+2:]
 	}
 	return ""
-}
-
-func prepareElasticIndexTemplate() {
-
-	//template := strings.Replace(mappingTemplate, "%%MAPPING_VERSION%%", mappingVersion, -1)
-	_, err := client.IndexPutTemplate("global_logs-*").BodyString(mappingTemplate).Do()
-	if err != nil {
-		log.Errorf("Could not add index template; %s", err.Error())
-		os.Exit(1)
-	} else {
-		log.Info("Index template added.")
-	}
 }
