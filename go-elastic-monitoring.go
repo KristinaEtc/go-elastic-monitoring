@@ -49,6 +49,8 @@ type Elastic struct {
 	URL          string
 	TemplateName string
 	Remapping    bool
+	ID           string
+	Name         string
 }
 
 // GlobalConf is a struct with global options,
@@ -82,6 +84,8 @@ func Connect(address string, login string, passcode string) (*stomp.Conn, error)
 	options = []func(*stomp.Conn) error{
 		stomp.ConnOpt.Login(login, passcode),
 		stomp.ConnOpt.Host(address),
+		stomp.ConnOpt.Header("wormmq.link.peer", globalOpt.ElasticServer.ID),
+		stomp.ConnOpt.Header("wormmq.link.peer_name", globalOpt.ElasticServer.Name),
 		//stomp.ConnOpt.HeartBeat(heartbeat, heartbeat),
 	}
 
