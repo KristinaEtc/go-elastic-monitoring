@@ -45,11 +45,16 @@ type Subs struct {
 	Index    string
 }
 
+type Elastic struct {
+	URL string
+}
+
 // GlobalConf is a struct with global options,
 // like server address and queue format, etc.
 
 type ConfigFile struct {
 	Subscriptions []Subs
+	ElasticServer Elastic `json:"Elastic"`
 }
 
 var globalOpt = ConfigFile{
@@ -143,7 +148,8 @@ func main() {
 
 	var err error
 	config.ReadGlobalConfig(&globalOpt, "go-elastic-monitoring options")
-	client, err = elastic.NewClient()
+	log.Debug(globalOpt.ElasticServer.URL)
+	client, err = elastic.NewClient(elastic.SetURL(globalOpt.ElasticServer.URL))
 	if err != nil {
 		log.Error("elasicsearch: could not create client")
 		os.Exit(1)
@@ -193,7 +199,6 @@ func formatMsg(msg []byte) (*string, *string, error) {
 			if lenUTCFormat == lenRfc3339WithTimeZone {
 				t, err = time.Parse("2006-01-02T15:04:05Z +0300 MSK", (*importantFields).Utc)
 			}
-
 		}
 	default:
 		{
@@ -269,7 +274,7 @@ func trimStringFromSym(str string, sym string) string {
 func prepareElasticIndexTemplate() {
 
 	//template := strings.Replace(mappingTemplate, "%%MAPPING_VERSION%%", mappingVersion, -1)
-	_, err := client.IndexPutTemplate("global_logs-*").BodyString(mappingTemplate).Do()
+	_, err := client.IndexPutTemplate("global_logs-2*").BodyString(mappingTemplate).Do()
 	if err != nil {
 		log.Errorf("Could not add index template; %s", err.Error())
 		os.Exit(1)
