@@ -73,7 +73,7 @@ func initTemplate(templateName string) (string, error) {
 	tN := tmpl{template: templateName}
 	t.Execute(&doc, tN)
 	mappedTmpl := doc.String()
-	log.Debug(mappedTmpl)
+	//log.Debug(mappedTmpl)
 
 	return mappedTmpl, nil
 }

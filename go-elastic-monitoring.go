@@ -147,7 +147,7 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 		//processor.Add(r)
 		b.p.Add(r)
 
-		log.Debug("4")
+		//	log.Debug("4")
 
 		//log.Infof("[%s]/[%s]", subNode.Queue, subNode.Index)
 		/*if subNode.Index == "global_logs" {
@@ -172,9 +172,10 @@ func main() {
 
 	var err error
 	config.ReadGlobalConfig(&globalOpt, "go-elastic-monitoring options")
-	client, err = elastic.NewClient()
+	client, err = elastic.NewClient(elastic.SetURL(globalOpt.ElasticServer.URL))
 	if err != nil {
 		log.Error("elasicsearch: could not create client")
+		os.Exit(1)
 	}
 
 	log.Infof("BuildDate=%s\n", BuildDate)
@@ -198,7 +199,7 @@ func main() {
 }
 
 func configurateBulkProcess() *Bulker {
-	b := &Bulker{c: client}
+	b := &Bulker{c: client, index: "global_logs-2"}
 	err := b.Run()
 	if err != nil {
 		log.Error(err.Error())
@@ -223,7 +224,7 @@ func prepareElasticIndexTemplate() {
 		os.Exit(1)
 	}
 
-	log.Info(mappedTempl)
+	//	log.Info(mappedTempl)
 
 	//template := strings.Replace(mappingTemplate, "%%MAPPING_VERSION%%", mappingVersion, -1)
 	_, err = client.IndexPutTemplate(globalOpt.ElasticServer.TemplateName).BodyString(mappedTempl).Do()
