@@ -241,7 +241,7 @@ func checkMsgForValid(msg []byte) (*NecessaryFields, error) {
 		return nil, err
 	}
 	if data.ID == "" || data.Type == "" || data.Utc == "" {
-		//log.Warn("At least one of that field [ID, Type, Utc] not found; message ignored")
+		log.Warnf("Not status message %s", string(msg))
 		return nil, ErrNoNeedfullFields
 	}
 	return &data, nil
