@@ -1,20 +1,9 @@
 package main
 
-type Error int
+import "errors"
 
-const (
-	ErrNoNeedfullFields Error = 0x01
-	ErrUnknownUTCFormat Error = 0x02
+// Error values
+var (
+	ErrNoNeedfullFields = errors.New("No fields which necessary for a table.")
+	ErrUnknownUTCFormat = errors.New("Unknown UTC Format")
 )
-
-// Error returns the error as a string.
-func (e Error) Error() string {
-	switch e {
-	case ErrNoNeedfullFields:
-		return "No fields which necessary for a table."
-	case ErrUnknownUTCFormat:
-		return "Unknown UTC Format"
-	default:
-		return "Unknown error"
-	}
-}
