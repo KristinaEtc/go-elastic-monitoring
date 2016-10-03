@@ -136,6 +136,8 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 			continue
 		}
 
+		//log.Debugf("msg=%s", *message)
+
 		r := elastic.NewBulkIndexRequest().
 			Index(subNode.Index + "-" + *utc).
 			Type(subNode.TypeName).
@@ -287,29 +289,33 @@ func formatMsg(msg []byte) (*string, *string, error) {
 	timeStr = timeStr[:idx]
 
 	formattedMsg := addProcessNameShort(msg, (*importantFields).ProcessName)
+	deleteNewlineSym(&formattedMsg)
 
-	var strMsg string
+	return &formattedMsg, &timeStr, nil
+}
+
+func deleteNewlineSym(msg *string) {
+
+	formattedMsg := *msg
 	if strings.Contains(formattedMsg, "\n") {
 
 		var msgMapTemplate interface{}
-		err = json.Unmarshal([]byte(formattedMsg), &msgMapTemplate)
+		err := json.Unmarshal([]byte(formattedMsg), &msgMapTemplate)
 		if err != nil {
-			//log.Error(err.Error())
-			return &formattedMsg, &timeStr, err
+			log.WithField("func", "deleting newline in msg").Error(err.Error())
+			return
 		}
 		msgMap := msgMapTemplate.(map[string]interface{})
 		//for _, v := range msgMapTemplate {
 		jsonMsg, err := json.Marshal(msgMap)
 		if err != nil {
-			return &formattedMsg, &timeStr, err
+			log.WithField("func", "deleting newline in msg").Error(err.Error())
+			return
 		}
 
-		strMsg = string(jsonMsg)
-		log.Debugf("string msg = %s", strMsg)
+		*msg = string(jsonMsg)
 	}
 
-	//return &formattedMsg, &timeStr, nil
-	return &strMsg, &timeStr, nil
 }
 
 func checkMsgForValid(msg []byte) (*NecessaryFields, error) {
