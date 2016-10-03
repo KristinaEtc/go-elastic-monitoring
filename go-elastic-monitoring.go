@@ -288,7 +288,28 @@ func formatMsg(msg []byte) (*string, *string, error) {
 
 	formattedMsg := addProcessNameShort(msg, (*importantFields).ProcessName)
 
-	return &formattedMsg, &timeStr, nil
+	var strMsg string
+	if strings.Contains(formattedMsg, "\n") {
+
+		var msgMapTemplate interface{}
+		err = json.Unmarshal([]byte(formattedMsg), &msgMapTemplate)
+		if err != nil {
+			//log.Error(err.Error())
+			return &formattedMsg, &timeStr, err
+		}
+		msgMap := msgMapTemplate.(map[string]interface{})
+		//for _, v := range msgMapTemplate {
+		jsonMsg, err := json.Marshal(msgMap)
+		if err != nil {
+			return &formattedMsg, &timeStr, err
+		}
+
+		strMsg = string(jsonMsg)
+		log.Debugf("string msg = %s", strMsg)
+	}
+
+	//return &formattedMsg, &timeStr, nil
+	return &strMsg, &timeStr, nil
 }
 
 func checkMsgForValid(msg []byte) (*NecessaryFields, error) {
