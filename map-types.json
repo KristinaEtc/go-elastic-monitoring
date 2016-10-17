@@ -1,21 +1,23 @@
 {
-        "template" : "global_logs-*",
+        "template" : "logs_test-*",
         "settings": {
             "number_of_shards": 1
             },
             "mappings" : {
-                "_default_" : {
+                "log-mapping" : {
                     "properties" : {
                             "id" : { "type" : "string", "index" : "not_analyzed" },
                             "pid" : {"type" : "long"},
                             "process_short" : {"type": "string", "index":"not_analyzed"},
                             "process" : {"type": "string"},
                             "tid" : {"type": "long"},
-                            "subtype" : {"type": "string"},
-                            "user": {"type" : "string"},
+                            "subtype" : {"type": "string", "index":"not_analyzed"},
+                            "subsystem" : {"type": "string", "index":"not_analyzed"},
+                            "user": {"type" : "string",  "index":"not_analyzed"},
                             "utc" : {"type": "date"  },
                             "type": {"type" : "string", "index": "not_analyzed"},
-                            "computer": {"type": "string", "index": "not_analyzed"}
+                            "computer": {"type": "string", "index": "not_analyzed"},
+                            "name": {"type": "string", "index": "not_analyzed"}
                 }
             },
         "aliases" : { }

@@ -3,6 +3,8 @@
 package main
 
 import (
+	_ "github.com/KristinaEtc/slflog"
+
 	"bytes"
 	"errors"
 	"fmt"
@@ -10,8 +12,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	_ "github.com/KristinaEtc/slflog"
 
 	elastic "gopkg.in/olivere/elastic.v3"
 )

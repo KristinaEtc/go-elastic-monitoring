@@ -1,0 +1,39 @@
+{
+  "Logs": {
+    "Handlers": [
+      {"Type": "stderr", 
+       "Level": "DEBUG"
+      },
+      {"Type": "file", 
+       "Level": "INFO",
+       "Filename": "info.log"
+      },
+      {"Type": "file", 
+       "Level": "ERROR",
+       "Filename": "error.log"
+      },
+      {"Type": "file", 
+       "Level": "DEBUG",
+       "Filename": "debug.log"
+      }
+    ],
+    "CallerInfo": true,
+    "Logpath": "logs"
+  },
+  "Elastic": {
+    "URL" : "192.168.240.105:9200",
+    "TemplateName" : "global_logs-3-*",
+    "Remapping": false, 
+    "ID" : "elastic-bulk",
+    "Name": "elastic-bulk"
+  },
+  "Subscriptions": [
+      {"Host": "navi2.tekinsoft.com:61613",
+      "Login": "elastic",
+      "Passcode": "goh9aerogheegh5Wi7ke",
+      "Queue": "/topic/debug_logs",
+      "TypeName" : "map-type-nominatin",
+      "Index": "global_logs-3"
+      }
+    ]
+}

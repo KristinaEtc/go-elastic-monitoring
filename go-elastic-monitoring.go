@@ -43,15 +43,15 @@ type Subs struct {
 	Passcode string
 	Queue    string
 	TypeName string
-	Index    string
 }
 
 type Elastic struct {
-	URL          string
-	TemplateName string
-	Remapping    bool
-	ID           string
-	Name         string
+	URL string
+	//	TemplateName string
+	Remapping bool
+	ID        string
+	Name      string
+	Index     string
 }
 
 // GlobalConf is a struct with global options,
@@ -105,8 +105,8 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 	defer wg.Done()
 
 	log.WithFields(slf.Fields{
-		"queque":       subNode.Queue,
-		"elasticIndex": subNode.Index,
+		"queque": subNode.Queue,
+		//"elasticIndex": subNode.Index,
 	}).Debug("Configuring... ")
 
 	conn, err := Connect(subNode.Host, subNode.Login, subNode.Passcode)
@@ -133,13 +133,12 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 
 		//check if message has necessary fields; adding fields
 		if message, utc, err = formatMsg(msg.Body); err != nil {
+			log.Debugf("msg with err=%s", msg.Body)
 			continue
 		}
 
-		//log.Debugf("msg=%s", *message)
-
 		r := elastic.NewBulkIndexRequest().
-			Index(subNode.Index + "-" + *utc).
+			Index(globalOpt.ElasticServer.Index + "-" + *utc).
 			Type(subNode.TypeName).
 			Doc(*message)
 
@@ -151,23 +150,6 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 		//processor.Add(r)
 		b.p.Add(r)
 
-		//	log.Debug("4")
-
-		//log.Infof("[%s]/[%s]", subNode.Queue, subNode.Index)
-		/*if subNode.Index == "global_logs" {
-			_, err = client.Index().
-				Index(subNode.Index + "-" + *utc).
-				Type(globalOpt.TypeName).
-				BodyString(*message).
-				//Refresh(true).
-				Do()
-			if err != nil {
-				log.Errorf("Elasticsearch [index %s]: %s in message %s", subNode.Index, err.Error(), *message)
-				//log.Errorf("Elasticsearch: %s", err.Error())
-				os.Exit(1)
-			}
-			msgCount++
-		}*/
 	}
 }
 
@@ -190,9 +172,9 @@ func main() {
 
 	log.Info("Starting working...")
 
-	if globalOpt.ElasticServer.Remapping {
+	/*if globalOpt.ElasticServer.Remapping {
 		prepareElasticIndexTemplate()
-	}
+	}*/
 
 	b := configurateBulkProcess()
 	defer b.Close()
@@ -202,7 +184,7 @@ func main() {
 }
 
 func configurateBulkProcess() *Bulker {
-	b := &Bulker{c: client, index: "global_logs-2"}
+	b := &Bulker{c: client, index: globalOpt.ElasticServer.Index}
 	err := b.Run()
 	if err != nil {
 		log.Error(err.Error())
@@ -219,7 +201,7 @@ func configurateBulkProcess() *Bulker {
 	return b
 }
 
-func prepareElasticIndexTemplate() {
+/*func prepareElasticIndexTemplate() {
 
 	mappedTempl, err := initTemplate(globalOpt.ElasticServer.TemplateName)
 	if err != nil {
@@ -237,7 +219,7 @@ func prepareElasticIndexTemplate() {
 	} else {
 		log.Info("Index template added.")
 	}
-}
+}*/
 
 func formatMsg(msg []byte) (*string, *string, error) {
 
