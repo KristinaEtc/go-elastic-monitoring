@@ -1,10 +1,10 @@
 {
-        "template" : "logs_test-*",
+        "template" : "global_logs-1-*",
         "settings": {
             "number_of_shards": 1
             },
             "mappings" : {
-                "log-mapping" : {
+                "gl" : {
                     "properties" : {
                             "id" : { "type" : "string", "index" : "not_analyzed" },
                             "pid" : {"type" : "long"},
