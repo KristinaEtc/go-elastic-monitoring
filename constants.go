@@ -18,7 +18,7 @@ type NecessaryFields struct {
 const (
 	lenRfc3339WithoutZ     = len("2006-01-02T15:04:05")
 	lenRfc3339WithZ        = len("2006-01-02T15:04:05Z")
-	lenRfc3339WithTimeZone = len("2006-01-02T15:04:05Z +0300 MSK")
+	lenRfc3339WithTimeZone = len("2006-01-02T15:04:05 -0700 MST")
 	lenRfc3339             = len(time.RFC3339)
 )
 

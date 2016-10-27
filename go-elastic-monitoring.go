@@ -132,7 +132,7 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 		}
 
 		//check if message has necessary fields; adding fields
-		if message, utc, err = formatMsg(msg.Body); err != nil {
+		if message, utc, err = parseMessage(msg.Body); err != nil {
 			log.Debugf("msg with err=%s", msg.Body)
 			continue
 		}
@@ -221,7 +221,7 @@ func configurateBulkProcess() *Bulker {
 	}
 }*/
 
-func formatMsg(msg []byte) (*string, *string, error) {
+func parseMessage(msg []byte) (*string, *string, error) {
 
 	// unmarshal check if msg has nessesary fields
 	importantFields, err := checkMsgForValid(msg)
@@ -235,21 +235,26 @@ func formatMsg(msg []byte) (*string, *string, error) {
 	switch {
 	case lenUTCFormat == lenRfc3339:
 		{
+			//TODO: check Z/+/- usage for negative offset timezones!
 			t, err = time.Parse(time.RFC3339, (*importantFields).Utc)
 		}
 	case lenUTCFormat < lenRfc3339:
 		{
 			if lenUTCFormat == lenRfc3339WithoutZ {
+				//UTC without explicit zone marker
 				t, err = time.Parse("2006-01-02T15:04:05", (*importantFields).Utc)
 			}
 			if lenUTCFormat == lenRfc3339WithZ {
+				//UTC with explicit Z marker
 				t, err = time.Parse("2006-01-02T15:04:05Z", (*importantFields).Utc)
 			}
 		}
 	case lenUTCFormat > lenRfc3339:
 		{
+			//strange non-standard format, why?
 			if lenUTCFormat == lenRfc3339WithTimeZone {
-				t, err = time.Parse("2006-01-02T15:04:05Z +0300 MSK", (*importantFields).Utc)
+				log.Warnf("parseMessage: non-standard time format %s", (*importantFields).Utc)
+				t, err = time.Parse("2006-01-02T15:04:05 -0700 MST", (*importantFields).Utc)
 			}
 		}
 	default:
