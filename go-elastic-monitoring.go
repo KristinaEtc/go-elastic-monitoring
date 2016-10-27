@@ -230,7 +230,6 @@ func formatMsg(msg []byte) (*string, *string, error) {
 	}
 
 	lenUTCFormat := len((*importantFields).Utc)
-	var timeStr string
 	var t time.Time
 
 	switch {
@@ -264,16 +263,12 @@ func formatMsg(msg []byte) (*string, *string, error) {
 		return nil, nil, err
 	}
 
-	timeStr = t.String()
-
-	//cut all except date
-	idx := strings.IndexAny(timeStr, " ")
-	timeStr = timeStr[:idx]
+	indexName := t.In(time.UTC).Format("2006-01-02")
 
 	formattedMsg := addProcessNameShort(msg, (*importantFields).ProcessName)
 	deleteNewlineSym(&formattedMsg)
 
-	return &formattedMsg, &timeStr, nil
+	return &formattedMsg, &indexName, nil
 }
 
 func deleteNewlineSym(msg *string) {
