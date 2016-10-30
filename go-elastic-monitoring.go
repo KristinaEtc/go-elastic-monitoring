@@ -112,7 +112,7 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 	defer wg.Done()
 
 	log.WithFields(slf.Fields{
-		"queque": subNode.Queue,
+		"queue": subNode.Queue,
 		//"elasticIndex": subNode.Index,
 	}).Debug("Configuring... ")
 
@@ -127,9 +127,6 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 		return
 	}
 
-	var message *string
-	var utc *string
-
 	for {
 
 		msg, err := sub.Read()
@@ -138,19 +135,31 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 			continue
 		}
 
+		var parsedMsg *MessageParseResult
 		//check if message has necessary fields; adding fields
-		if message, utc, err = parseMessage(msg.Body); err != nil {
+		if parsedMsg, err = parseMessage(msg.Body); err != nil {
 			log.Debugf("msg with err=%s", msg.Body)
 			continue
 		}
 
+		var indexName string
+		if parsedMsg.IndexPrefix != "" {
+			indexName = parsedMsg.IndexPrefix
+		} else if subNode.Index != "" {
+			indexName = subNode.Index
+		} else {
+			indexName = globalOpt.ElasticServer.Index
+		}
+
+		indexName += "-" + parsedMsg.IndexDatePostfix
+
 		r := elastic.NewBulkIndexRequest().
-			Index(globalOpt.ElasticServer.Index + "-" + *utc).
+			Index(indexName).
 			Type(subNode.TypeName).
-			Doc(*message)
+			Doc(parsedMsg.FormattedMessage)
 
 		if r == nil {
-			log.Warn("nil")
+			log.Error("nil")
 			os.Exit(1)
 		}
 
@@ -193,7 +202,8 @@ func main() {
 }
 
 func configurateBulkProcess() *Bulker {
-	b := &Bulker{c: client, index: globalOpt.ElasticServer.Index}
+	//b := &Bulker{c: client, index: globalOpt.ElasticServer.Index}
+	b := &Bulker{c: client}
 	err := b.Run()
 	if err != nil {
 		log.Error(err.Error())
@@ -230,12 +240,12 @@ func configurateBulkProcess() *Bulker {
 	}
 }*/
 
-func parseMessage(msg []byte) (*string, *string, error) {
+func parseMessage(msg []byte) (*MessageParseResult, error) {
 
 	// unmarshal check if msg has nessesary fields
 	importantFields, err := checkMsgForValid(msg)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	lenUTCFormat := len((*importantFields).Utc)
@@ -274,15 +284,17 @@ func parseMessage(msg []byte) (*string, *string, error) {
 	}
 
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-
-	indexName := t.In(time.UTC).Format("2006-01-02")
 
 	formattedMsg := addProcessNameShort(msg, (*importantFields).ProcessName)
 	deleteNewlineSym(&formattedMsg)
 
-	return &formattedMsg, &indexName, nil
+	return &MessageParseResult{
+		IndexPrefix:      importantFields.ElasticIndexPrefix,
+		IndexDatePostfix: t.In(time.UTC).Format("2006-01-02"),
+		FormattedMessage: formattedMsg,
+	}, nil
 }
 
 func deleteNewlineSym(msg *string) {

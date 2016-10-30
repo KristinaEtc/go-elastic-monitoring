@@ -6,9 +6,7 @@ import (
 	_ "github.com/KristinaEtc/slflog"
 
 	"bytes"
-	"errors"
 	"fmt"
-	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -47,7 +45,7 @@ type Bulker struct {
 	c       *elastic.Client
 	p       *elastic.BulkProcessor
 	workers int
-	index   string
+	//index   string
 
 	beforeCalls  int64         // # of calls into before callback
 	afterCalls   int64         // # of calls into after callback
@@ -63,9 +61,9 @@ type Bulker struct {
 // Run starts the Bulker.
 func (b *Bulker) Run() error {
 	// Recreate Elasticsearch index
-	if err := b.ensureIndex(); err != nil {
+	/*if err := b.ensureIndex(); err != nil {
 		return err
-	}
+	}*/
 
 	// Start bulk processor
 	p, err := b.c.BulkProcessor().
@@ -98,6 +96,7 @@ func (b *Bulker) Close() error {
 	return nil
 }
 
+/*
 // indexer is a goroutine that periodically pushes data into
 // bulk processor unless being "throttled" or "stopped".
 // i don't use it
@@ -133,6 +132,7 @@ func (b *Bulker) indexer() {
 
 	b.stopC <- struct{}{} // ack stopping
 }
+*/
 
 // before is invoked from bulk processor before every commit.
 func (b *Bulker) before(id int64, requests []elastic.BulkableRequest) {
@@ -160,13 +160,14 @@ func (b *Bulker) Stats() elastic.BulkProcessorStats {
 	return b.p.Stats()
 }
 
+/*
 // ensureIndex creates the index in Elasticsearch.
 // It will be dropped if it already exists.
 func (b *Bulker) ensureIndex() error {
 	if b.index == "" {
 		return errors.New("no index name")
 	}
-	/*exists, err := b.c.IndexExists(b.index).Do()
+	exists, err := b.c.IndexExists(b.index).Do()
 	if err != nil {
 		return err
 	}
@@ -179,6 +180,6 @@ func (b *Bulker) ensureIndex() error {
 	_, err = b.c.CreateIndex(b.index).Do()
 	if err != nil {
 		return err
-	}*/
+	}
 	return nil
-}
+}*/

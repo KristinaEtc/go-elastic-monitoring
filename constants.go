@@ -9,9 +9,19 @@ type NecessaryFields struct {
 	// a struct once, with necessary fields
 	ProcessName string `json:"process"`
 
+	//ElasticIndexName - optional field to control elastic index prefix
+	ElasticIndexPrefix string `json:"elastic_index_prefix"`
+
 	ID   string `json:"id"`
 	Type string `json:"type"`
 	Utc  string `json:"utc"`
+}
+
+//MessageParseResult - message preprocessing result
+type MessageParseResult struct {
+	IndexPrefix      string
+	IndexDatePostfix string
+	FormattedMessage string
 }
 
 // time formats
