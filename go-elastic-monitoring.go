@@ -21,6 +21,8 @@ var log = slf.WithContext("go-stomp-nominatim.go")
 
 var options = []func(*stomp.Conn) error{}
 
+var uuid string
+
 var (
 	stop   = make(chan bool)
 	client *elastic.Client
@@ -43,25 +45,30 @@ type Subs struct {
 	Passcode string
 	Queue    string
 	TypeName string
+	Index    string
 }
 
 type Elastic struct {
 	URL string
 	//	TemplateName string
 	Remapping bool
-	ID        string
-	Name      string
-	Index     string
+	//ID        string
+	//Name      string
+	Index string
 }
 
 // GlobalConf is a struct with global options,
 // like server address and queue format, etc.
 type ConfigFile struct {
+	DirWithUUID   string
+	Name          string
 	Subscriptions []Subs
 	ElasticServer Elastic `json:"Elastic"`
 }
 
 var globalOpt = ConfigFile{
+	Name:          "default-name",
+	DirWithUUID:   ".stomp_elastic/",
 	Subscriptions: []Subs{},
 }
 
@@ -84,8 +91,8 @@ func Connect(address string, login string, passcode string) (*stomp.Conn, error)
 	options = []func(*stomp.Conn) error{
 		stomp.ConnOpt.Login(login, passcode),
 		stomp.ConnOpt.Host(address),
-		stomp.ConnOpt.Header("wormmq.link.peer", globalOpt.ElasticServer.ID),
-		stomp.ConnOpt.Header("wormmq.link.peer_name", globalOpt.ElasticServer.Name),
+		stomp.ConnOpt.Header("wormmq.link.peer", uuid),
+		stomp.ConnOpt.Header("wormmq.link.peer_name", globalOpt.Name),
 		//stomp.ConnOpt.HeartBeat(heartbeat, heartbeat),
 	}
 
@@ -157,11 +164,7 @@ func main() {
 
 	var err error
 	config.ReadGlobalConfig(&globalOpt, "go-elastic-monitoring options")
-	client, err = elastic.NewClient(elastic.SetURL(globalOpt.ElasticServer.URL))
-	if err != nil {
-		log.Error("elasicsearch: could not create client")
-		os.Exit(1)
-	}
+	uuid = config.GetUUID(globalOpt.DirWithUUID)
 
 	log.Infof("BuildDate=%s\n", BuildDate)
 	log.Infof("GitCommit=%s\n", GitCommit)
@@ -169,6 +172,12 @@ func main() {
 	log.Infof("GitState=%s\n", GitState)
 	log.Infof("GitSummary=%s\n", GitSummary)
 	log.Infof("VERSION=%s\n", Version)
+
+	client, err = elastic.NewClient(elastic.SetURL(globalOpt.ElasticServer.URL))
+	if err != nil {
+		log.Error("elasicsearch: could not create client")
+		os.Exit(1)
+	}
 
 	log.Info("Starting working...")
 

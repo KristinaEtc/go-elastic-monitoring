@@ -1,3 +1,5 @@
 go-elastic-monitoring
 go-elastic-monitoring.config
 logs
+.stomp_elastic/
+*.exe
