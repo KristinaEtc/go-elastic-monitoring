@@ -1,10 +1,10 @@
 {
-        "template" : "global_logs-1-*",
+        "template" : "alert-*",
         "settings": {
             "number_of_shards": 1
             },
             "mappings" : {
-                "gl" : {
+                "alert-type" : {
                     "properties" : {
                             "id" : { "type" : "string", "index" : "not_analyzed" },
                             "pid" : {"type" : "long"},
