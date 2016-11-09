@@ -17,7 +17,7 @@ import (
 	elastic "gopkg.in/olivere/elastic.v3"
 )
 
-var log = slf.WithContext("go-stomp-nominatim.go")
+var log = slf.WithContext("elastic-monitoring")
 
 var options = []func(*stomp.Conn) error{}
 
@@ -134,6 +134,8 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 			log.Warnf("Got empty message; ignore, err:%s", err.Error())
 			continue
 		}
+
+		log.Debugf("!!! msg r=%s", msg.Body)
 
 		var parsedMsg *MessageParseResult
 		//check if message has necessary fields; adding fields
