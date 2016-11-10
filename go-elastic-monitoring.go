@@ -194,6 +194,9 @@ func main() {
 	log.Infof("VERSION=%s\n", Version)
 
 	client, err = elastic.NewClient(elastic.SetURL(globalOpt.ElasticServer.URL),
+		//elastic.SetSnifferTimeoutStartup(30*time.Second),
+		//elastic.SetTraceLog(&loggerWrapper{slf.LevelDebug}),
+		//elastic.SetInfoLog(&loggerWrapper{slf.LevelInfo}),
 		elastic.SetErrorLog(&loggerWrapper{slf.LevelError}))
 
 	if err != nil {
