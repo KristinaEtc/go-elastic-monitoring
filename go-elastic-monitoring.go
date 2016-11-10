@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -14,7 +15,7 @@ import (
 	"github.com/go-stomp/stomp"
 	_ "github.com/lib/pq"
 	"github.com/ventu-io/slf"
-	elastic "gopkg.in/olivere/elastic.v3"
+	elastic "gopkg.in/olivere/elastic.v5"
 )
 
 var log = slf.WithContext("elastic-monitoring")
@@ -50,7 +51,7 @@ type Subs struct {
 
 type Elastic struct {
 	URL string
-	//	TemplateName string
+	//TemplateName string
 	Remapping bool
 	//ID        string
 	//Name      string
@@ -135,7 +136,7 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 			continue
 		}
 
-		log.Debugf("!!! msg r=%s", msg.Body)
+		//log.Debugf("!!! msg r=%s", msg.Body)
 
 		var parsedMsg *MessageParseResult
 		//check if message has necessary fields; adding fields
@@ -171,6 +172,14 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 	}
 }
 
+type loggerWrapper struct {
+	level slf.Level
+}
+
+func (logger *loggerWrapper) Printf(format string, v ...interface{}) {
+	log.Log(logger.level, fmt.Sprintf(format, v...))
+}
+
 func main() {
 
 	var err error
@@ -184,16 +193,18 @@ func main() {
 	log.Infof("GitSummary=%s\n", GitSummary)
 	log.Infof("VERSION=%s\n", Version)
 
-	client, err = elastic.NewClient(elastic.SetURL(globalOpt.ElasticServer.URL))
+	client, err = elastic.NewClient(elastic.SetURL(globalOpt.ElasticServer.URL),
+		elastic.SetErrorLog(&loggerWrapper{slf.LevelError}))
+
 	if err != nil {
-		log.Error("elasicsearch: could not create client")
+		log.Errorf("elasticsearch: could not create client %s", err.Error())
 		os.Exit(1)
 	}
 
 	log.Info("Starting working...")
 
 	/*if globalOpt.ElasticServer.Remapping {
-		prepareElasticIndexTemplate()
+	  prepareElasticIndexTemplate()
 	}*/
 
 	b := configurateBulkProcess()
@@ -222,7 +233,8 @@ func configurateBulkProcess() *Bulker {
 	return b
 }
 
-/*func prepareElasticIndexTemplate() {
+/*
+func prepareElasticIndexTemplate() {
 
 	mappedTempl, err := initTemplate(globalOpt.ElasticServer.TemplateName)
 	if err != nil {
@@ -230,7 +242,7 @@ func configurateBulkProcess() *Bulker {
 		os.Exit(1)
 	}
 
-	//	log.Info(mappedTempl)
+	//  log.Info(mappedTempl)
 
 	//template := strings.Replace(mappingTemplate, "%%MAPPING_VERSION%%", mappingVersion, -1)
 	_, err = client.IndexPutTemplate(globalOpt.ElasticServer.TemplateName).BodyString(mappedTempl).Do()
