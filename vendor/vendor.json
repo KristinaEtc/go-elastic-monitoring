@@ -1,0 +1,85 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "csETv6A+vWaoMHKZKSBYkzvtyzk=",
+			"path": "github.com/KristinaEtc/config",
+			"revision": "8ed85620171d70ac3b86a2d3a427dd8f06a4a139",
+			"revisionTime": "2016-10-07T10:41:38Z"
+		},
+		{
+			"checksumSHA1": "PvXc+VPbwrb7FcPKXvRaqEcA43A=",
+			"path": "github.com/KristinaEtc/slflog",
+			"revision": "db9bfff4780c9bfc182ecf445c758ebd793e8feb",
+			"revisionTime": "2016-08-20T10:45:24Z"
+		},
+		{
+			"checksumSHA1": "6nmAJBw2phU9MUmkUnqFvbO5urg=",
+			"path": "github.com/kardianos/osext",
+			"revision": "29ae4ffbc9a6fe9fb2bc5029050ce6996ea1d3bc",
+			"revisionTime": "2015-12-22T15:32:29Z"
+		},
+		{
+			"checksumSHA1": "xB64naNkKuwFKUPkmdwdyY2mN6o=",
+			"path": "github.com/lib/pq",
+			"revision": "3cd0097429be7d611bb644ef85b42bfb102ceea4",
+			"revisionTime": "2016-03-14T19:42:24Z"
+		},
+		{
+			"checksumSHA1": "xppHi82MLqVx1eyQmbhTesAEjx8=",
+			"path": "github.com/lib/pq/oid",
+			"revision": "3cd0097429be7d611bb644ef85b42bfb102ceea4",
+			"revisionTime": "2016-03-14T19:42:24Z"
+		},
+		{
+			"checksumSHA1": "zmC8/3V4ls53DJlNTKDZwPSC/dA=",
+			"path": "github.com/satori/go.uuid",
+			"revision": "0aa62d5ddceb50dbcb909d790b5345affd3669b6",
+			"revisionTime": "2016-07-13T18:03:06Z"
+		},
+		{
+			"checksumSHA1": "6wNdwwFgO/a7Dm0Ywj7NxK/p9dU=",
+			"path": "github.com/ventu-io/slf",
+			"revision": "43c1a8878c1f98a1a88268c6805080b3c6be945b",
+			"revisionTime": "2016-04-29T23:35:11Z"
+		},
+		{
+			"checksumSHA1": "CL/xrk+ViG1KixIKIuDiRUUSMZM=",
+			"path": "github.com/ventu-io/slog",
+			"revision": "82f9bc9959769f12189886094adc6b986bba085a",
+			"revisionTime": "2016-05-01T20:56:29Z"
+		},
+		{
+			"checksumSHA1": "9jjO5GjLa0XF/nfWihF02RoH4qc=",
+			"path": "golang.org/x/net/context",
+			"revision": "c4c3ea71919de159c9e246d7be66deb7f0a39a58",
+			"revisionTime": "2016-05-27T23:48:58Z"
+		},
+		{
+			"checksumSHA1": "Do+l129/Bafh54VFaquooqtCcfk=",
+			"path": "golang.org/x/net/context/ctxhttp",
+			"revision": "c4c3ea71919de159c9e246d7be66deb7f0a39a58",
+			"revisionTime": "2016-05-27T23:48:58Z"
+		},
+		{
+			"checksumSHA1": "E+QIDCGMVo8H+WDdmuBDOcXWlE4=",
+			"path": "gopkg.in/olivere/elastic.v3",
+			"revision": "f9fd15e1ea3a50bbe58c72a4b8820499fe3bb0e1",
+			"revisionTime": "2016-09-01T08:53:46Z"
+		},
+		{
+			"checksumSHA1": "lLdKOn9RPtFoTtPUNq5+sIInAiE=",
+			"path": "gopkg.in/olivere/elastic.v3/backoff",
+			"revision": "f9fd15e1ea3a50bbe58c72a4b8820499fe3bb0e1",
+			"revisionTime": "2016-09-01T08:53:46Z"
+		},
+		{
+			"checksumSHA1": "XQg6xG6l15Ke43KolthYYnVDCYo=",
+			"path": "gopkg.in/olivere/elastic.v3/uritemplates",
+			"revision": "f9fd15e1ea3a50bbe58c72a4b8820499fe3bb0e1",
+			"revisionTime": "2016-09-01T08:53:46Z"
+		}
+	],
+	"rootPath": "github.com/KristinaEtc/go-elastic-monitoring"
+}
