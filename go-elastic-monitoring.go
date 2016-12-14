@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -72,18 +70,83 @@ var globalOpt = ConfigFile{
 	Subscriptions: []Subs{},
 }
 
-func recvMessages(b *Bulker) {
+//-------------------------------------------------------------------
 
-	defer func() {
-		stop <- true
-	}()
+/*func prepareElasticIndexTemplate() {
 
-	var wg sync.WaitGroup
-	for _, sub := range globalOpt.Subscriptions {
-		wg.Add(1)
-		go readFromSub(sub, &wg, b)
+	mappedTempl, err := initTemplate(globalOpt.ElasticServer.TemplateName)
+	if err != nil {
+		log.Error(err.Error())
+		os.Exit(1)
 	}
-	wg.Wait()
+
+	//	log.Info(mappedTempl)
+
+	//template := strings.Replace(mappingTemplate, "%%MAPPING_VERSION%%", mappingVersion, -1)
+	_, err = client.IndexPutTemplate(globalOpt.ElasticServer.TemplateName).BodyString(mappedTempl).Do()
+	if err != nil {
+		log.Errorf("Could not add index template; %s", err.Error())
+		os.Exit(1)
+	} else {
+		log.Info("Index template added.")
+	}
+}*/
+
+func parseMessage(msg []byte) (*MessageParseResult, error) {
+
+	// unmarshal check if msg has nessesary fields
+	importantFields, err := checkMsgForValid(msg)
+	if err != nil {
+		return nil, err
+	}
+
+	lenUTCFormat := len((*importantFields).Utc)
+	var t time.Time
+
+	switch {
+	case lenUTCFormat == lenRfc3339:
+		{
+			//TODO: check Z/+/- usage for negative offset timezones!
+			t, err = time.Parse(time.RFC3339, (*importantFields).Utc)
+		}
+	case lenUTCFormat < lenRfc3339:
+		{
+			if lenUTCFormat == lenRfc3339WithoutZ {
+				//UTC without explicit zone marker
+				t, err = time.Parse("2006-01-02T15:04:05", (*importantFields).Utc)
+			}
+			if lenUTCFormat == lenRfc3339WithZ {
+				//UTC with explicit Z marker
+				t, err = time.Parse("2006-01-02T15:04:05Z", (*importantFields).Utc)
+			}
+		}
+	case lenUTCFormat > lenRfc3339:
+		{
+			//strange non-standard format, why?
+			if lenUTCFormat == lenRfc3339WithTimeZone {
+				log.Warnf("parseMessage: non-standard time format %s", (*importantFields).Utc)
+				t, err = time.Parse("2006-01-02T15:04:05 -0700 MST", (*importantFields).Utc)
+			}
+		}
+	default:
+		{
+			log.Warnf("Unknown utc format: %s", (*importantFields).Utc)
+			err = ErrUnknownUTCFormat
+		}
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	formattedMsg := addProcessNameShort(msg, (*importantFields).ProcessName)
+	deleteNewlineSym(&formattedMsg)
+
+	return &MessageParseResult{
+		IndexPrefix:      importantFields.ElasticIndexPrefix,
+		IndexDatePostfix: t.In(time.UTC).Format("2006-01-02"),
+		FormattedMessage: formattedMsg,
+	}, nil
 }
 
 func Connect(address string, login string, passcode string) (*stomp.Conn, error) {
@@ -171,6 +234,39 @@ func readFromSub(subNode Subs, wg *sync.WaitGroup, b *Bulker) {
 	}
 }
 
+func recvMessages(b *Bulker) {
+
+	defer func() {
+		stop <- true
+	}()
+
+	var wg sync.WaitGroup
+	for _, sub := range globalOpt.Subscriptions {
+		wg.Add(1)
+		go readFromSub(sub, &wg, b)
+	}
+	wg.Wait()
+}
+
+func configurateBulkProcess() *Bulker {
+	//b := &Bulker{c: client, index: globalOpt.ElasticServer.Index}
+	b := &Bulker{c: client}
+	err := b.Run()
+	if err != nil {
+		log.Error(err.Error())
+		os.Exit(1)
+	}
+	//defer b.Close()
+	// Run the statistics printer
+	go func(b *Bulker) {
+		for range time.Tick(10 * time.Second) {
+			printStats(b)
+		}
+	}(b)
+
+	return b
+}
+
 func main() {
 
 	var err error
@@ -201,173 +297,4 @@ func main() {
 
 	go recvMessages(b)
 	<-stop
-}
-
-func configurateBulkProcess() *Bulker {
-	//b := &Bulker{c: client, index: globalOpt.ElasticServer.Index}
-	b := &Bulker{c: client}
-	err := b.Run()
-	if err != nil {
-		log.Error(err.Error())
-		os.Exit(1)
-	}
-	//defer b.Close()
-	// Run the statistics printer
-	go func(b *Bulker) {
-		for range time.Tick(10 * time.Second) {
-			printStats(b)
-		}
-	}(b)
-
-	return b
-}
-
-/*func prepareElasticIndexTemplate() {
-
-	mappedTempl, err := initTemplate(globalOpt.ElasticServer.TemplateName)
-	if err != nil {
-		log.Error(err.Error())
-		os.Exit(1)
-	}
-
-	//	log.Info(mappedTempl)
-
-	//template := strings.Replace(mappingTemplate, "%%MAPPING_VERSION%%", mappingVersion, -1)
-	_, err = client.IndexPutTemplate(globalOpt.ElasticServer.TemplateName).BodyString(mappedTempl).Do()
-	if err != nil {
-		log.Errorf("Could not add index template; %s", err.Error())
-		os.Exit(1)
-	} else {
-		log.Info("Index template added.")
-	}
-}*/
-
-func parseMessage(msg []byte) (*MessageParseResult, error) {
-
-	// unmarshal check if msg has nessesary fields
-	importantFields, err := checkMsgForValid(msg)
-	if err != nil {
-		return nil, err
-	}
-
-	lenUTCFormat := len((*importantFields).Utc)
-	var t time.Time
-
-	switch {
-	case lenUTCFormat == lenRfc3339:
-		{
-			//TODO: check Z/+/- usage for negative offset timezones!
-			t, err = time.Parse(time.RFC3339, (*importantFields).Utc)
-		}
-	case lenUTCFormat < lenRfc3339:
-		{
-			if lenUTCFormat == lenRfc3339WithoutZ {
-				//UTC without explicit zone marker
-				t, err = time.Parse("2006-01-02T15:04:05", (*importantFields).Utc)
-			}
-			if lenUTCFormat == lenRfc3339WithZ {
-				//UTC with explicit Z marker
-				t, err = time.Parse("2006-01-02T15:04:05Z", (*importantFields).Utc)
-			}
-		}
-	case lenUTCFormat > lenRfc3339:
-		{
-			//strange non-standard format, why?
-			if lenUTCFormat == lenRfc3339WithTimeZone {
-				log.Warnf("parseMessage: non-standard time format %s", (*importantFields).Utc)
-				t, err = time.Parse("2006-01-02T15:04:05 -0700 MST", (*importantFields).Utc)
-			}
-		}
-	default:
-		{
-			log.Warnf("Unknown utc format: %s", (*importantFields).Utc)
-			err = ErrUnknownUTCFormat
-		}
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	formattedMsg := addProcessNameShort(msg, (*importantFields).ProcessName)
-	deleteNewlineSym(&formattedMsg)
-
-	return &MessageParseResult{
-		IndexPrefix:      importantFields.ElasticIndexPrefix,
-		IndexDatePostfix: t.In(time.UTC).Format("2006-01-02"),
-		FormattedMessage: formattedMsg,
-	}, nil
-}
-
-func deleteNewlineSym(msg *string) {
-
-	formattedMsg := *msg
-	if strings.Contains(formattedMsg, "\n") {
-
-		var msgMapTemplate interface{}
-		err := json.Unmarshal([]byte(formattedMsg), &msgMapTemplate)
-		if err != nil {
-			log.WithField("func", "deleting newline in msg").Error(err.Error())
-			return
-		}
-		msgMap := msgMapTemplate.(map[string]interface{})
-		//for _, v := range msgMapTemplate {
-		jsonMsg, err := json.Marshal(msgMap)
-		if err != nil {
-			log.WithField("func", "deleting newline in msg").Error(err.Error())
-			return
-		}
-
-		*msg = string(jsonMsg)
-	}
-
-}
-
-func checkMsgForValid(msg []byte) (*NecessaryFields, error) {
-
-	var data NecessaryFields
-
-	if err := json.Unmarshal(msg, &data); err != nil {
-		log.Errorf("Could not get parse request: %s", err.Error())
-		return nil, err
-	}
-	if data.ID == "" || data.Type == "" || data.Utc == "" {
-		log.Warnf("Not status message %s", string(msg))
-		return nil, ErrNoNeedfullFields
-	}
-	return &data, nil
-}
-
-func addProcessNameShort(msg []byte, fullProcessName string) string {
-
-	shortName := getShortName(fullProcessName)
-	newMsg := "{\"process_short\": \"" + shortName + "\", " + string(msg[1:])
-	return newMsg
-}
-
-func getShortName(fullName string) string {
-	if fullName == "" {
-		return ""
-	}
-
-	var shortName string
-
-	shortName = trimStringFromSym(fullName, "/")
-	if shortName != "" {
-		return shortName
-	}
-
-	shortName = trimStringFromSym(fullName, "\\")
-	if shortName != "" {
-		return shortName
-	}
-
-	return fullName
-}
-
-func trimStringFromSym(str string, sym string) string {
-	if idx := strings.LastIndex(str, sym); idx != -1 {
-		return str[(idx-1)+2:]
-	}
-	return ""
 }
