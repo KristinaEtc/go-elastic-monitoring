@@ -3,3 +3,6 @@ go-elastic-monitoring.config
 logs
 .stomp_elastic/
 *.exe
+vendor/github.com
+vendor/golang.org
+vendor/gopkg.in
