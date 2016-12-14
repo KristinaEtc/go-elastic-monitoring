@@ -15,6 +15,16 @@
 			"revisionTime": "2016-08-20T10:45:24Z"
 		},
 		{
+			"checksumSHA1": "Zxr242Wa55D4T55xkw316JiTPqk=",
+			"origin": "github.com/KristinaEtc/stomp",
+			"path": "github.com/go-stomp/stomp",
+			"revision": "7c4ad759fecc05f1053f27fe8a3715b1869433f6",
+			"revisionTime": "2016-10-27T08:00:02Z",
+			"tree": true,
+			"version": "dev",
+			"versionExact": "dev"
+		},
+		{
 			"checksumSHA1": "6nmAJBw2phU9MUmkUnqFvbO5urg=",
 			"path": "github.com/kardianos/osext",
 			"revision": "29ae4ffbc9a6fe9fb2bc5029050ce6996ea1d3bc",
