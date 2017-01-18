@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -12,7 +13,7 @@ import (
 	"github.com/go-stomp/stomp"
 	_ "github.com/lib/pq"
 	"github.com/ventu-io/slf"
-	elastic "gopkg.in/olivere/elastic.v3"
+	elastic "gopkg.in/olivere/elastic.v5"
 )
 
 var log = slf.WithContext("elastic-monitoring")
@@ -267,6 +268,14 @@ func configurateBulkProcess() *Bulker {
 	return b
 }
 
+type loggerWrapper struct {
+	level slf.Level
+}
+
+func (logger *loggerWrapper) Printf(format string, v ...interface{}) {
+	log.Log(logger.level, fmt.Sprintf(format, v...))
+}
+
 func main() {
 
 	var err error
@@ -280,9 +289,13 @@ func main() {
 	log.Infof("GitSummary=%s\n", GitSummary)
 	log.Infof("VERSION=%s\n", Version)
 
-	client, err = elastic.NewClient(elastic.SetURL(globalOpt.ElasticServer.URL))
+	client, err = elastic.NewClient(elastic.SetURL(globalOpt.ElasticServer.URL),
+		//elastic.SetSnifferTimeoutStartup(30*time.Second),
+		//elastic.SetTraceLog(&loggerWrapper{slf.LevelDebug}),
+		//elastic.SetInfoLog(&loggerWrapper{slf.LevelInfo}),
+		elastic.SetErrorLog(&loggerWrapper{slf.LevelError}))
 	if err != nil {
-		log.Error("elasicsearch: could not create client")
+		log.Errorf("elasicsearch: could not create client %s", err.Error())
 		os.Exit(1)
 	}
 

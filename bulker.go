@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	elastic "gopkg.in/olivere/elastic.v3"
+	elastic "gopkg.in/olivere/elastic.v5"
 )
 
 // printStats retrieves statistics from the Bulker and prints them.
